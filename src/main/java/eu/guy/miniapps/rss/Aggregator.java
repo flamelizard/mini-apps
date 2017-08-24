@@ -8,28 +8,28 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.StringJoiner;
 
 /**
  * Created by Tom on 8/6/2017.
  */
 /*
-Start 8.6, building simple app
+Start 6.8, building simple app
 
 Learnt
 
 TODO
-Guava string func explore
-do not save if RSS item in db
+items - feed info, message, link in db
+do not save duplicate RSS item
 handle unreachable sites - done but does not work
 show news for a particular day/author/keyword
 add JPA/Hibernate access to db
+categorize feeds - it, social, fun (practice sql table design)
  */
 public class Aggregator {
     private final PersistRSS persistence;
     private List<String> feeds = new ArrayList<>();
 
-    public Aggregator() throws SQLException {
+    public Aggregator() throws SQLException, ClassNotFoundException {
         persistence = new PersistRSS();
     }
 
@@ -70,16 +70,13 @@ public class Aggregator {
     public void displayFeedAll() throws SQLException {
         System.out.println("Printing RSS feeds... ");
         ResultSet rs = persistence.query("select * from " + PersistRSS.DB_NAME);
-        StringJoiner join;
-        Integer i = 1;
         while (rs.next()) {
-            join = new StringJoiner("");
-            join.add(rs.getString(1)).
-                    add(rs.getString(2)).
-                    add(rs.getDate(3) != null ? rs.getDate(3).toString() : null).
-                    add(rs.getString(4));
-            System.out.println("<" + i++ + ">");
-            System.out.println(join.toString());
+            RSSItem item = new RSSItem();
+            item.setTitle(rs.getString(2));
+            item.setLink(rs.getString(3));
+            item.setDate(rs.getDate(4));
+            item.setAuthor(rs.getString(5));
+            System.out.println(item);
         }
     }
 

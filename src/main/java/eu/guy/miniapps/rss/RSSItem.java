@@ -1,13 +1,28 @@
 package eu.guy.miniapps.rss;
 
-/**
- * Created by Tom on 8/8/2017.
- */
+import java.util.Date;
+
 public class RSSItem {
     private String title;
     private String link;
     private String author;
-    private String date;
+    private Date date;
+
+    public String getAuthor() {
+        return author;
+    }
+
+    public void setAuthor(String author) {
+        this.author = author;
+    }
+
+    public Date getDate() {
+        return date;
+    }
+
+    public void setDate(Date date) {
+        this.date = date;
+    }
 
     public String getTitle() {
         return title;
@@ -26,14 +41,6 @@ public class RSSItem {
     }
 
     public String toString() {
-        return String.format("[%s]%n%s%n%s-%s%n", title, link, date, author);
-    }
-
-    public void setAuthor(String author) {
-        this.author = author;
-    }
-
-    public void setDate(String date) {
-        this.date = date;
+        return String.format("[%s]%n%s%n%s, %s%n", title, link, date, author);
     }
 }

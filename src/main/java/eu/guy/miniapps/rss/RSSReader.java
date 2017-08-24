@@ -9,18 +9,18 @@ import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * Created by Tom on 8/6/2017.
- */
 /*
-News aggregator
-- check regularly RSS feeds from favorite web sites
-RSS document = feed
+Probably does not work code below
+Convert from LocalDateTime to legacy Date, took a while to figure out
+java.util.Date = Date.from(Instant.from(<LocalDateTime instance>));
 */
 
 public class RSSReader {
@@ -77,7 +77,7 @@ public class RSSReader {
                         item.setAuthor(getValue(xmlReader.nextEvent()));
                         break;
                     case DATE:
-                        item.setDate(getValue(xmlReader.nextEvent()));
+                        item.setDate(toDate(getValue(xmlReader.nextEvent())));
                         break;
                 }
             }
@@ -97,5 +97,14 @@ public class RSSReader {
         if (match.find())
             return match.group(1);
         return s;
+    }
+
+    //    LocalDateTime, Instant etc. are modern Date/Time API
+//    Date, Calendar are legacy
+    private Date toDate(String date) {
+        String dateFmt = "EEE, dd MMM yyyy HH:mm:ss zzz";
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern(dateFmt);
+        LocalDateTime dateTime = LocalDateTime.parse(date, formatter);
+        return java.sql.Date.valueOf(dateTime.toLocalDate());
     }
 }
