@@ -1,5 +1,9 @@
 package eu.guy.miniapps.rss;
 
+import jdk.internal.org.xml.sax.Attributes;
+import jdk.internal.org.xml.sax.SAXException;
+import jdk.internal.org.xml.sax.helpers.DefaultHandler;
+
 import javax.xml.stream.XMLEventReader;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamException;
@@ -9,19 +13,12 @@ import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
+import java.sql.Date;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/*
-Probably does not work code below
-Convert from LocalDateTime to legacy Date, took a while to figure out
-java.util.Date = Date.from(Instant.from(<LocalDateTime instance>));
-*/
 
 public class RSSReader {
     private final String ITEM = "item";
@@ -35,36 +32,36 @@ public class RSSReader {
     public RSSReader(String url) throws IOException {
         try {
 //            Needed to add url SSL certificate through java keytool
+            System.out.println("Getting URL " + url + "...");
             this.url = new URL(url);
         } catch (MalformedURLException e) {
             e.printStackTrace();
         }
         connectToUrl();
+
     }
 
     private void connectToUrl() throws IOException {
         URLConnection conn = this.url.openConnection();
-        conn.setConnectTimeout(0);
-        conn.setReadTimeout(0);
+        conn.setConnectTimeout(5000); // default is infinite, 0
         in = conn.getInputStream();
     }
 
-    public List<RSSItem> getFeed() throws XMLStreamException {
+    public RSSFeed getFeed() throws XMLStreamException {
 //        factory pattern for more types of readers
         XMLInputFactory inputFactory = XMLInputFactory.newInstance();
         XMLEventReader xmlReader = inputFactory.createXMLEventReader(in);
 
-        RSSItem item = null;
-        List<RSSItem> items = new ArrayList<>();
+        RSSItem item = new RSSItem();
+        RSSFeed feed = new RSSFeed();
+        boolean isFeedHeader = true;
         while (xmlReader.hasNext()) {
             XMLEvent event = xmlReader.nextEvent();
-            if (item == null) {
-                item = new RSSItem();
-            } else if (event.isEndElement() &&
+            if (event.isEndElement() &&
                     event.asEndElement().getName().getLocalPart().equals(ITEM)) {
 //                System.out.println("[feed " + item);
-                items.add(item);
-                item = null;
+                feed.add(item);
+                item = new RSSItem();
             } else if (event.isStartElement()) {
                 switch (event.asStartElement().getName().getLocalPart()) {
                     case TITLE:
@@ -79,10 +76,18 @@ public class RSSReader {
                     case DATE:
                         item.setDate(toDate(getValue(xmlReader.nextEvent())));
                         break;
+                    case ITEM:
+//                        Ugly way to parse out feed info
+                        if (isFeedHeader) {
+                            feed.setTitle(item.getTitle());
+                            feed.setLink(item.getLink());
+                            isFeedHeader = false;
+                            item = new RSSItem();
+                        }
                 }
             }
         }
-        return items;
+        return feed;
     }
 
     private String getValue(XMLEvent tag) {
@@ -99,12 +104,30 @@ public class RSSReader {
         return s;
     }
 
-    //    LocalDateTime, Instant etc. are modern Date/Time API
-//    Date, Calendar are legacy
     private Date toDate(String date) {
-        String dateFmt = "EEE, dd MMM yyyy HH:mm:ss zzz";
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern(dateFmt);
-        LocalDateTime dateTime = LocalDateTime.parse(date, formatter);
-        return java.sql.Date.valueOf(dateTime.toLocalDate());
+//        String dateFmt = "EEE, dd MMM yyyy HH:mm:ss zzz";
+//        DateTimeFormatter formatter = DateTimeFormatter.ofPattern(dateFmt);
+        LocalDateTime dateTime = LocalDateTime.parse(
+                date, DateTimeFormatter.RFC_1123_DATE_TIME);
+        return Date.valueOf(dateTime.toLocalDate());
+    }
+
+    //    SAX vs StAX
+//    SAX has less flexibility
+    class FeedHandler extends DefaultHandler {
+        private RSSFeed feed = new RSSFeed();
+        private boolean title = false;
+
+        @Override
+        public void startElement(String s, String s1, String s2, Attributes attributes) throws SAXException {
+            if (s2.equalsIgnoreCase("title"))
+                title = true;
+        }
+
+        @Override
+        public void characters(char[] chars, int i, int i1) throws SAXException {
+            if (title)
+                feed.setTitle(String.valueOf(chars));
+        }
     }
 }

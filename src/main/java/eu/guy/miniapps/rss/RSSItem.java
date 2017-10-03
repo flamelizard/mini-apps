@@ -1,6 +1,7 @@
 package eu.guy.miniapps.rss;
 
-import java.util.Date;
+
+import java.sql.Date;
 
 public class RSSItem {
     private String title;
