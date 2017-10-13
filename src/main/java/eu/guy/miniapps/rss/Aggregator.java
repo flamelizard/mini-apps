@@ -19,6 +19,16 @@ import static eu.guy.miniapps.rss.Utils.safeQuoteSQLLiteral;
 /*
 Start 6.8, building simple app
 
+Learnt
+
+== Class over primitives - Big one !!
+Passing classes between methods gives flexibility when additional data is
+necessary.
+If I pass individual arguments, any change to method signature requires to
+update code in many places. Passing classes around eliminates this problem
+since a class encapsulates individual pieces of information and any change
+will occur only inside the class.
+
 TODO
 categorize feeds - it, social, fun (practice sql table design)
 timed check for updates - run for an hour, show new content, highlight
@@ -47,7 +57,7 @@ Feed pubData set only on root.cz. Other feeds have date only on messages alone.
  */
 public class Aggregator {
     private PersistRSS persistence;
-    private List<String> feeds = new ArrayList<>();
+    private List<RSSUrl> feeds = new ArrayList<>();
 
     public Aggregator() throws SQLException, ClassNotFoundException {
         persistence = new PersistRSS();
@@ -55,21 +65,23 @@ public class Aggregator {
 
     public static void main(String[] args) throws Exception {
         Aggregator hub = new Aggregator();
-        hub.subscribe("https://www.root.cz/rss/clanky/");
+        hub.subscribe("https://www.root.cz/rss/clanky/", "IT");
 //        hub.subscribe("https://www.linux.com/feeds/tutorials/rss");
-        hub.subscribe("https://www.zdrojak.cz/feed/");
-        hub.aggregate(true);
-        hub.displayLatestRSS();
-        hub.searchRSSByKeyword("java");
-        hub.searchRSSByDate("2017-09-18");
+//        hub.subscribe("https://www.zdrojak.cz/feed/", "IT");
+//        hub.aggregate(true);
+//        hub.displayLatestRSS();
+//        hub.searchRSSByKeyword("java");
+//        hub.searchRSSByDate("2017-09-18");
+        hub.pollFeed(10, 60);
     }
 
     public void aggregate(boolean persistFeeds) throws
             IOException, XMLStreamException, SQLException {
         System.out.println("Gathering RSS feeds... ");
-        for (String feedUrl : feeds) {
-            RSSReader reader = new RSSReader(feedUrl);
+        for (RSSUrl url : feeds) {
+            RSSReader reader = new RSSReader(url.getUrl());
             RSSFeed feed = reader.getFeed();
+            feed.setCategory(url.getCategory());
 
             System.out.println("Persisting to database... ");
             if (persistFeeds) {
@@ -80,8 +92,10 @@ public class Aggregator {
         }
     }
 
-    public void subscribe(String url) {
-        feeds.add(url);
+    public void subscribe(String url, String category) {
+        RSSUrl rssUrl = new RSSUrl(url);
+        rssUrl.setCategory(category);
+        feeds.add(rssUrl);
     }
 
     public void displayLatestRSS() throws SQLException {
@@ -96,10 +110,6 @@ public class Aggregator {
         );
         printRSSItems(rs);
         rs.close();
-    }
-
-    private void checkForUpdates() {
-
     }
 
     public void searchRSSByKeyword(String word) throws SQLException {
@@ -138,5 +148,21 @@ public class Aggregator {
             System.out.println(item);
         }
         items.close();
+    }
+
+    //    TODO finish off
+    public void pollFeed(Integer period, Integer stopAfter) throws
+            XMLStreamException, IOException, SQLException, InterruptedException {
+        System.out.println(
+                String.format("Polling feed [every %ds over %ds] ... ",
+                        period, stopAfter));
+        Integer sumTime = 0;
+        period = period * 1000;
+        stopAfter = stopAfter * 1000;   // -1 to run indefinitely
+        while (stopAfter < 0 || sumTime < stopAfter) {
+            aggregate(true);
+            Thread.sleep(period);
+            sumTime += period;
+        }
     }
 }

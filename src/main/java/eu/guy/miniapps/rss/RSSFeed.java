@@ -9,6 +9,7 @@ import java.util.List;
 public class RSSFeed {
     private String title;
     private String link;
+    private String category;
     private List<RSSItem> items = new ArrayList<>();
 
     public String getLink() {
@@ -36,6 +37,14 @@ public class RSSFeed {
     }
 
     public String toString() {
-        return String.format("FEED [%s] %s", title, link);
+        return String.format("FEED [%s] %s %s", title, link, category);
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
     }
 }

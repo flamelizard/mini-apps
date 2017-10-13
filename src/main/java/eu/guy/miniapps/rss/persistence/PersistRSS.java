@@ -34,7 +34,7 @@ public class PersistRSS {
 
     public static void main(String[] args) throws Exception {
         PersistRSS persist = new PersistRSS();
-//        persist.recreateTables();
+        persist.recreateTables();
     }
 
     private void setupConnection() throws SQLException, ClassNotFoundException {
@@ -59,8 +59,8 @@ public class PersistRSS {
     public Integer insertFeed(RSSFeed feed) throws SQLException {
         if (getFeedId(feed) == -1) {
             String sql = String.format(
-                    "insert into %s values (NULL, '%s', '%s')",
-                    FEED_DB, feed.getTitle(), feed.getLink());
+                    "insert into %s values (NULL, '%s', '%s', '%s')",
+                    FEED_DB, feed.getTitle(), feed.getLink(), feed.getCategory());
             return stmt.executeUpdate(sql);
         }
         return 0;
