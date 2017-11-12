@@ -11,10 +11,6 @@ SQLite will create db file upon access if it does not exist
 Connection string "jdbc:sqlite://path/to/file"
 Prepared statement - compiled and parsed only once, fast for many similar
 queries
-
-TODO
-if not exists create table?
-
  */
 public class Sqlite101 {
     private File rssDDL = new File

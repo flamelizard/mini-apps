@@ -6,42 +6,32 @@ import javax.xml.stream.XMLStreamException;
 import java.io.IOException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.time.*;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Queue;
+import java.util.concurrent.*;
 
-import static eu.guy.miniapps.rss.Utils.safeQuoteSQLLiteral;
+import static eu.guy.miniapps.rss.Utils.*;
 
 /**
  * Created by Tom on 8/6/2017.
  */
 /*
-Start 6.8, building simple app
-
-Learnt
-
-== Class over primitives - Big one !!
-Passing classes between methods gives flexibility when additional data is
-necessary.
-If I pass individual arguments, any change to method signature requires to
-update code in many places. Passing classes around eliminates this problem
-since a class encapsulates individual pieces of information and any change
-will occur only inside the class.
-
 TODO
-categorize feeds - it, social, fun (practice sql table design)
-timed check for updates - run for an hour, show new content, highlight
 add JPA/Hibernate access to db
-very basic unit test with a mock maybe
+very basic unit test with a mock maybe, junit scheduler
 --> FREEZE <--
-NO MORE FEATURES SO I CAN DO SOMETHING ELSE
+NO MORE FEATURES
 
 SOMEDAY MIGHT FIX
 RSS date is saved with time info which is never used, refactor date related
 code to a class
 
 DONE
+scheduler, collect feeds at regular interval
 search by date
 search by keyword
 do not save duplicate RSS item
@@ -58,6 +48,8 @@ Feed pubData set only on root.cz. Other feeds have date only on messages alone.
 public class Aggregator {
     private PersistRSS persistence;
     private List<RSSUrl> feeds = new ArrayList<>();
+    private Queue queue = new LinkedBlockingQueue();
+    private boolean threadFailed = false;
 
     public Aggregator() throws SQLException, ClassNotFoundException {
         persistence = new PersistRSS();
@@ -65,15 +57,16 @@ public class Aggregator {
 
     public static void main(String[] args) throws Exception {
         Aggregator hub = new Aggregator();
-        hub.subscribe("https://www.root.cz/rss/clanky/", "IT");
+        hub.subscribe("https://www.pproot.cz/rss/clanky/", "IT");
 //        hub.subscribe("https://www.linux.com/feeds/tutorials/rss");
 //        hub.subscribe("https://www.zdrojak.cz/feed/", "IT");
 //        hub.aggregate(true);
 //        hub.displayLatestRSS();
 //        hub.searchRSSByKeyword("java");
 //        hub.searchRSSByDate("2017-09-18");
-        hub.pollFeed(10, 60);
+        hub.runScheduler(15, 5);
     }
+
 
     public void aggregate(boolean persistFeeds) throws
             IOException, XMLStreamException, SQLException {
@@ -132,37 +125,66 @@ public class Aggregator {
         printRSSItems(persistence.query(select));
     }
 
-    private Long getEpochMillis(LocalDate date) {
-        LocalDateTime dt = date.atTime(0, 0);
-        ZonedDateTime zdt = dt.atZone(ZoneId.systemDefault());
-        return Instant.from(zdt).toEpochMilli();
-    }
-
-    public void printRSSItems(ResultSet items) throws SQLException {
-        while (items.next()) {
-            RSSItem item = new RSSItem();
-            item.setTitle(items.getString(3));
-            item.setLink(items.getString(4));
-            item.setDate(items.getDate(5));
-            item.setAuthor(items.getString(6));
-            System.out.println(item);
+    public void runScheduler(Integer period, Integer stopAfter) {
+        ScheduledExecutorService scheduler = Executors.
+                newSingleThreadScheduledExecutor();
+//        fixed delay respects thread runtime
+        ScheduledFuture tracker = scheduler.scheduleWithFixedDelay(
+                new AggregateThread(this), 0, period, TimeUnit.SECONDS);
+        scheduler.schedule(new Stopper(scheduler), stopAfter, TimeUnit.SECONDS);
+        while (!tracker.isDone()) {
+            if (isThreadFailed()) {
+                System.out.println("Scheduler shutting down...");
+                scheduler.shutdown();
+                break;
+            }
+            try {
+                Thread.sleep(2000);
+            } catch (InterruptedException e) {
+            }
         }
-        items.close();
     }
 
-    //    TODO finish off
-    public void pollFeed(Integer period, Integer stopAfter) throws
-            XMLStreamException, IOException, SQLException, InterruptedException {
-        System.out.println(
-                String.format("Polling feed [every %ds over %ds] ... ",
-                        period, stopAfter));
-        Integer sumTime = 0;
-        period = period * 1000;
-        stopAfter = stopAfter * 1000;   // -1 to run indefinitely
-        while (stopAfter < 0 || sumTime < stopAfter) {
-            aggregate(true);
-            Thread.sleep(period);
-            sumTime += period;
+    public synchronized void setThreadFailed() {
+        this.threadFailed = true;
+    }
+
+    public boolean isThreadFailed() {
+        return threadFailed;
+    }
+
+    //    Runnable runs in own thread and exception will not propagate to main tr.
+    class AggregateThread implements Runnable {
+        private Aggregator aggregator;
+
+        AggregateThread(Aggregator aggregator) {
+            this.aggregator = aggregator;
+        }
+
+        @Override
+        public void run() {
+            try {
+                System.out.println("thread [" + LocalDateTime.now() + "]");
+                aggregator.aggregate(true);
+            } catch (Exception e) {
+                e.printStackTrace();
+                setThreadFailed();
+            }
+        }
+    }
+
+    class Stopper implements Callable {
+        private ScheduledExecutorService scheduler;
+
+        Stopper(ScheduledExecutorService scheduler) {
+            this.scheduler = scheduler;
+        }
+
+        @Override
+        public Object call() throws Exception {
+            System.out.println("Scheduled time reached. Stop...");
+            scheduler.shutdown();
+            return null;
         }
     }
 }
